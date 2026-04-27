@@ -5,98 +5,200 @@ class CephClient < Formula
   sha256 "362269c147913af874b2249a46846b0e6f82d2ceb50af46222b6ddec9991b29a"
   revision 1
 
-  bottle do
+bottle do
     rebuild 1
     root_url "https://github.com/mulbc/homebrew-ceph-client/releases/download/quincy-17.2.5-1"
     sha256 cellar: :any, arm64_ventura: "b6e30275e0c5012874b73130fd0119b7f40f8180f1c6b54e3abb1f8bf8680ed5"
   end
 
   # depends_on "osxfuse"
-  depends_on "boost@1.76"
-  depends_on "openssl" => :build
-  depends_on "cmake" => :build
+  depends_on "cmake@3.26" => :build
   depends_on "ninja" => :build
-  depends_on "cython" => :build
-  depends_on "leveldb" => :build
-  depends_on "nss"
   depends_on "pkg-config" => :build
-  depends_on "python@3.10"
+  depends_on "python@3.11" => :build
+
+  depends_on "boost@1.85" => :build
+  depends_on "cython" => :build
+  depends_on "doxygen"
+  depends_on "fmt@8" => :build
+  depends_on "icu4c" => :build
+  depends_on "llvm@17" => :build
+  depends_on "leveldb" => :build
+  depends_on "lz4" => :build
+  depends_on "lua@5.4" => :build
+  depends_on "nss"
+  depends_on "openssl" => :build
   depends_on "sphinx-doc" => :build
+  depends_on "thrift" => :build
   depends_on "yasm"
+
   def caveats
-    <<-EOS.undent
+    <<~EOS
       macFUSE must be installed prior to building this formula. macFUSE is also necessary
       if you plan to use the FUSE support of CephFS. You can either install macFUSE from
       https://osxfuse.github.io or use the following command:
 
       brew install --cask macfuse
+
+      The fuse version shipped with osxfuse is too old to access the
+      supplementary group IDs in cephfs.
+      Thus you need to add this to your ceph.conf to avoid errors:
+
+      [client]
+      fuse_set_user_groups = false
+
     EOS
   end
 
-  resource "prettytable" do
-    url "https://files.pythonhosted.org/packages/cb/7d/7e6bc4bd4abc49e9f4f5c4773bb43d1615e4b476d108d1b527318b9c6521/prettytable-3.2.0.tar.gz"
-    sha256 "ae7d96c64100543dc61662b40a28f3b03c0f94a503ed121c6fca2782c5816f81"
-  end
+  #resource "prettytable" do
+  #  url "https://files.pythonhosted.org/packages/cb/7d/7e6bc4bd4abc49e9f4f5c4773bb43d1615e4b476d108d1b527318b9c6521/prettytable-3.2.0.tar.gz"
+  #  sha256 "ae7d96c64100543dc61662b40a28f3b03c0f94a503ed121c6fca2782c5816f81"
+  #end
 
   resource "PyYAML" do
-    url "https://files.pythonhosted.org/packages/36/2b/61d51a2c4f25ef062ae3f74576b01638bebad5e045f747ff12643df63844/PyYAML-6.0.tar.gz"
-    sha256 "68fb519c14306fec9720a2a5b45bc9f0c8d1b9c72adf45c37baedfcd949c35a2"
+    url "https://files.pythonhosted.org/packages/54/ed/79a089b6be93607fa5cdaedf301d7dfb23af5f25c398d5ead2525b063e17/pyyaml-6.0.2.tar.gz"
+    sha256 "d584d9ec91ad65861cc08d42e834324ef890a082e591037abe114850ff7bbc3e"
   end
 
-  resource "wcwidth" do
-    url "https://files.pythonhosted.org/packages/89/38/459b727c381504f361832b9e5ace19966de1a235d73cdbdea91c771a1155/wcwidth-0.2.5.tar.gz"
-    sha256 "c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83"
-  end
+  #resource "wcwidth" do
+  #  url "https://files.pythonhosted.org/packages/89/38/459b727c381504f361832b9e5ace19966de1a235d73cdbdea91c771a1155/wcwidth-0.2.5.tar.gz"
+  #  sha256 "c4d647b99872929fdb7bdcaa4fbe7f01413ed3d98077df798530e5b04f116c83"
+  #end
 
   patch :DATA
 
   def install
+    ENV["SDKROOT"] = MacOS.sdk_path
+    ENV["HOMEBREW_CXXFLAGS"] = "-std=c++17"
+    ENV["CXXFLAGS"] = "-std=c++17"
+    ENV["CFLAGS"] = "-std=c17"
+    ENV["CC"]  = Formula["llvm@17"].opt_bin/"clang"
+    ENV["CXX"] = Formula["llvm@17"].opt_bin/"clang++"
+    ENV.append "CXXFLAGS", " -Wno-return-type"
+    ENV.prepend_path "PATH", Formula["python@3.11"].opt_bin
+    ENV.prepend_path "PATH", Formula["llvm@17"].opt_bin
     ENV.prepend_path "PKG_CONFIG_PATH", "#{Formula["nss"].opt_lib}/pkgconfig"
     ENV.prepend_path "PKG_CONFIG_PATH", "#{Formula["openssl"].opt_lib}/pkgconfig"
     ENV.prepend_path "PKG_CONFIG_PATH", "/usr/local/lib/pkgconfig"
     xy = Language::Python.major_minor_version "python3"
     ENV.prepend_create_path "PYTHONPATH", "#{Formula["cython"].opt_libexec}/lib/python#{xy}/site-packages"
     ENV.prepend_create_path "PYTHONPATH", libexec/"vendor/lib/python#{xy}/site-packages"
+    # XXX this array is now empty, so this is a no-op
     resources.each do |r|
       r.stage do
-        system "python3", *Language::Python.setup_install_args(libexec/"vendor")
+        system Formula["python@3.11"].opt_bin/"python3", "-m", "pip", "install",
+            "--only-binary=:all:",
+            # "--no-deps",
+            #"--no-build-isolation",
+            "--prefix=#{libexec}/vendor",
+            "."
       end
     end
+
+    dirs = %w[
+      src/common
+      src/include
+      src/msg
+    ]
+
+    dirs.each do |dir|
+      Dir["#{dir}/**/*.{h,cc,cpp}"].select { |f| File.file?(f) }.each do |file|
+        text = File.read(file)
+        next unless text.include?("std::result_of_t")
+
+        File.write(
+          file,
+          text.gsub(/std::result_of_t<(\w+(?:&&?)?)\(([^)]*)\)>/) do
+            callable = $1
+            args = $2
+            arg_types = args.split(",").map(&:strip).join(", ")
+            "std::invoke_result_t<#{callable}, #{arg_types}>"
+          end
+        )
+      end
+    end
+
+    inreplace "src/include/compat.h",
+      "#define aligned_free(ptr) free(ptr)",
+      "#ifdef __cplusplus\n" \
+      "#include <cstdlib>\n" \
+      "inline void aligned_free(void* ptr) { ::free(ptr); }\n" \
+      "#else\n" \
+      "#include <stdlib.h>\n" \
+      "static inline void aligned_free(void* ptr) { free(ptr); }\n" \
+      "#endif"
 
     args = %W[
       -DDIAGNOSTICS_COLOR=always
       -DOPENSSL_ROOT_DIR=#{Formula["openssl"].opt_prefix}
+      -DLUA_INCLUDE_DIR=#{Formula["lua@5.4"].opt_include}
+      -DLUA_LIBRARY=#{Formula["lua@5.4"].opt_lib}/liblua.dylib
+      -DBOOST_ROOT=#{Formula["boost@1.85"].opt_prefix}
+      -DOPENSSL_ROOT_DIR=#{Formula["openssl@3"].opt_prefix}
+      -DPython3_EXECUTABLE=#{Formula["python@3.11"].opt_bin}/python3.11
+      -DBoost_NO_BOOST_CMAKE=ON
+      -DBoost_NO_SYSTEM_PATHS=OFF
+      -DBoost_USE_STATIC_LIBS=OFF
+      -DBoost_USE_MULTITHREADED=OFF
+      -DBoost_USE_STATIC_RUNTIME=OFF
+      -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_CXX_EXTENSIONS=OFF
+      -DCMAKE_CXX_STANDARD=17
+      -DCMAKE_CXX_STANDARD_REQUIRED=ON
+      -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       -DWITH_BABELTRACE=OFF
+      -DWITH_BLKDEV=OFF
       -DWITH_BLUESTORE=OFF
+      -DWITH_BOOST=ON
+      -DWITH_BUILD_TESTS=OFF
       -DWITH_CCACHE=OFF
-      -DWITH_CEPHFS=OFF
+      -DWITH_CEPHFS=ON
+      -DWITH_EXTBLKDEV=OFF
+      -DWITH_JAEGER=OFF
       -DWITH_KRBD=OFF
       -DWITH_LIBCEPHFS=ON
+      -DWITH_LIBRADOS=ON
       -DWITH_LTTNG=OFF
       -DWITH_LZ4=OFF
       -DWITH_MANPAGE=ON
       -DWITH_MGR=OFF
       -DWITH_MGR_DASHBOARD_FRONTEND=OFF
+      -DWITH_NBD=OFF
+      -DWITH_OPENTELEMETRY=OFF
+      -DWITH_OSD=OFF
+      -DWITH_QAT=OFF
+      -DWITH_QATZIP=OFF
+      -DWITH_RBD_NBD=OFF
+      -DWITH_RBD=ON
+      -DWITH_PYBIND=OFF
+      -DWITH_PYTHON_COMMON=OFF
+      -DWITH_PYTHON3=3.11
+      -DWITH_RADOS=ON
       -DWITH_RADOSGW=OFF
       -DWITH_RDMA=OFF
       -DWITH_SPDK=OFF
       -DWITH_SYSTEM_BOOST=ON
+      -DWITH_SYSTEM_FMT=ON
       -DWITH_SYSTEMD=OFF
       -DWITH_TESTS=OFF
+      -DWITH_TOOLS=ON
+      -DWITH_TRACING=OFF
       -DWITH_XFS=OFF
+      -DWITH_ZBD=OFF
     ]
     targets = %w[
       rados
-      rbd
-      cephfs
       ceph-conf
       ceph-fuse
+      cephfs
+      rbd
       manpages
-      cython_rados
-      cython_rbd
     ]
     mkdir "build" do
-      system "cmake", "-G", "Ninja", "..", *args, *std_cmake_args
+      system "cmake",
+        "-G", "Ninja",
+        "-D", "CMAKE_PREFIX_PATH=#{HOMEBREW_PREFIX}",
+        "..", *args, *std_cmake_args
       system "ninja", *targets
       executables = %w[
         bin/rados
@@ -148,7 +250,7 @@ class CephClient < Formula
       ].each do |name|
         man8.install "doc/man/#{name}.8"
       end
-      system "ninja", "src/pybind/install", "src/include/install"
+      system "ninja", "src/include/install"
     end
 
     bin.env_script_all_files(libexec/"bin", :PYTHONPATH => ENV["PYTHONPATH"])
@@ -162,24 +264,10 @@ class CephClient < Formula
     end
   end
 
-  def caveats; <<~EOS
-    The fuse version shipped with osxfuse is too old to access the
-    supplementary group IDs in cephfs.
-    Thus you need to add this to your ceph.conf to avoid errors:
-
-    [client]
-    fuse_set_user_groups = false
-
-    EOS
-  end
-
   test do
     system "#{bin}/ceph", "--version"
-    system "#{bin}/ceph-fuse", "--version"
-    system "#{bin}/rbd", "--version"
     system "#{bin}/rados", "--version"
-    system "python", "-c", "import rados"
-    system "python", "-c", "import rbd"
+    system "#{bin}/rbd", "--version"
   end
 end
 
@@ -214,7 +302,20 @@ index 9d66ae979a6..eabf22bf174 100644
      set(ENV{CEPH_LIBDIR} \"${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\")
 
 -    set(options --prefix=${CMAKE_INSTALL_PREFIX})
-+    set(options --prefix=${CMAKE_INSTALL_PREFIX} --install-lib=${CMAKE_INSTALL_PREFIX}/lib/python3.10/site-packages)
++    set(options --prefix=${CMAKE_INSTALL_PREFIX} --install-lib=${CMAKE_INSTALL_PREFIX}/lib/python3.11/site-packages)
      if(DEFINED ENV{DESTDIR})
        if(EXISTS /etc/debian_version)
          list(APPEND options --install-layout=deb)
+--- a/cmake/modules/BuildBoost.cmake	2022-10-17 23:07:30
++++ b/cmake/modules/BuildBoost.cmake	2026-04-24 20:00:11
+@@ -46,6 +46,10 @@
+ endmacro()
+
+ function(do_build_boost root_dir version)
++  if(WITH_SYSTEM_BOOST)
++    message(STATUS "Using system Boost, skipping build_boost()")
++    return()
++  endif()
+   cmake_parse_arguments(Boost_BUILD "" "" COMPONENTS ${ARGN})
+   set(boost_features "variant=release")
+   if(Boost_USE_MULTITHREADED)
