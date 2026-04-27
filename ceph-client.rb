@@ -1,8 +1,8 @@
 class CephClient < Formula
   desc "Ceph client tools and libraries"
   homepage "https://ceph.com"
-  url "https://download.ceph.com/tarballs/ceph-17.2.9.tar.gz"
-  sha256 "172236b503bed10f39c85465923902329afc41ca96c6740cbd774b986effa412"
+  url "https://download.ceph.com/tarballs/ceph-18.2.8.tar.gz"
+  sha256 "6a7d114f783bf8ae2a453f22d03d45761cf9f42aa146d191804a4980c8d8812c"
   revision 1
 
 bottle do
@@ -118,15 +118,24 @@ bottle do
       end
     end
 
-    inreplace "src/include/compat.h",
-      "#define aligned_free(ptr) free(ptr)",
-      "#ifdef __cplusplus\n" \
-      "#include <cstdlib>\n" \
-      "inline void aligned_free(void* ptr) { ::free(ptr); }\n" \
-      "#else\n" \
-      "#include <stdlib.h>\n" \
-      "static inline void aligned_free(void* ptr) { free(ptr); }\n" \
-      "#endif"
+    # ceph 17
+    #inreplace "src/include/compat.h",
+    #  "#define aligned_free(ptr) free(ptr)",
+    #  "#ifdef __cplusplus\n" \
+    #  "#include <cstdlib>\n" \
+    #  "inline void aligned_free(void* ptr) { ::free(ptr); }\n" \
+    #  "#else\n" \
+    #  "#include <stdlib.h>\n" \
+    #  "static inline void aligned_free(void* ptr) { free(ptr); }\n" \
+    #  "#endif"
+
+    # ceph 18
+    inreplace "src/osd/OSDMap.cc",
+      "max_prims_per_osd = std::max(max_prims_per_osd, n_prims);",
+      "max_prims_per_osd = std::max(max_prims_per_osd, (uint64_t)n_prims);"
+    inreplace "src/osd/OSDMap.cc",
+      "max_acting_prims_per_osd = std::max(max_acting_prims_per_osd, n_aprims);",
+      "max_acting_prims_per_osd = std::max(max_acting_prims_per_osd, (uint64_t)n_aprims);"
 
     args = %W[
       -DDIAGNOSTICS_COLOR=always
@@ -199,6 +208,12 @@ bottle do
         "-G", "Ninja",
         "-D", "CMAKE_PREFIX_PATH=#{HOMEBREW_PREFIX}",
         "..", *args, *std_cmake_args
+
+      # forcibly remove -lcap, which is linux only
+      inreplace "build.ninja",
+        " -lcap ",
+        " "
+
       system "ninja", *targets
       executables = %w[
         bin/rados
@@ -231,7 +246,7 @@ bottle do
         radosstriper.1.0.0
         radosstriper.1
         radosstriper
-        rbd.1.17.0
+        rbd.1.18.0
         rbd.1
         rbd
         cephfs.2.0.0
