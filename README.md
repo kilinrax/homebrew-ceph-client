@@ -24,7 +24,7 @@ If you don't have Homebrew, install it from their [homepage][homebrew].
 Then, add this tap:
 
 ```
-brew tap mulbc/ceph-client
+brew tap kilinrax/ceph-client
 ```
 
 ## Installing
