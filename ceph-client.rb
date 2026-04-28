@@ -8,7 +8,7 @@ class CephClient < Formula
 bottle do
     rebuild 1
     root_url "https://github.com/kilinrax/homebrew-ceph-client/releases/download/reef-18.2.8-1/"
-    sha256 cellar: :any, sonoma: "sha256:326e324477fb627379d3b8b5eca6c916c049e95b23ed5c77ff385553e1bb9e33"
+    sha256 cellar: :any, sonoma: "326e324477fb627379d3b8b5eca6c916c049e95b23ed5c77ff385553e1bb9e33"
   end
 
   # depends_on "osxfuse"
