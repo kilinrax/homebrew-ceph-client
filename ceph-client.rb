@@ -7,8 +7,8 @@ class CephClient < Formula
 
 bottle do
     rebuild 1
-    root_url "https://github.com/mulbc/homebrew-ceph-client/releases/download/quincy-17.2.5-1"
-    sha256 cellar: :any, arm64_ventura: "b6e30275e0c5012874b73130fd0119b7f40f8180f1c6b54e3abb1f8bf8680ed5"
+    root_url "https://github.com/kilinrax/homebrew-ceph-client/releases/download/reef-18.2.8-1/"
+    sha256 cellar: :any, arm64_sonoma: "sha256:326e324477fb627379d3b8b5eca6c916c049e95b23ed5c77ff385553e1bb9e33"
   end
 
   # depends_on "osxfuse"
